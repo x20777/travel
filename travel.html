@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>여행 플래너</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --border-color: #e2e8f0;
+            --danger-color: #ef4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Apple SD Gothic Neo', sans-serif; }
+        
+        /* 모바일 인앱 브라우저 및 스마트폰 스크롤 강제 해제 최적화 */
+        html, body {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden; /* 바디 자체는 고정하고 내부 컨테이너만 스크롤되도록 처리 */
+        }
+
+        /* 스마트폰에서 확실하게 스크롤을 담당하는 메인 래퍼 */
+        #app-wrapper {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        header { background: var(--primary-color); color: white; padding: 20px; text-align: center; font-size: 1.2rem; font-weight: bold; flex-shrink: 0; }
+        .container { max-width: 600px; width: 100%; margin: 0 auto; padding: 15px; flex: 1; padding-bottom: 90px; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* 공통 카드 스타일 (스케줄, 예약, 가계부) */
+        .card { 
+            background: var(--card-bg); 
+            border-radius: 12px; 
+            padding: 15px; 
+            margin-bottom: 12px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); 
+            border: 1px solid var(--border-color); 
+            position: relative; 
+            cursor: pointer;
+        }
+        .card h3 { font-size: 1.05rem; margin-bottom: 5px; color: #0f172a; padding-right: 140px; }
+        .card p { 
+            font-size: 0.9rem; 
+            color: #64748b; 
+            margin-bottom: 3px; 
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            line-height: 1.3;
+            word-break: break-all;
+        }
+        
+        /* 메모 전용 그리드 레이아웃 (좌우 2개 배치) */
+        .memo-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .memo-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            height: 140px;
+            cursor: pointer;
+        }
+        .memo-card h4 {
+            font-size: 0.95rem;
+            color: #0f172a;
+            margin-bottom: 6px;
+            padding-right: 40px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .memo-card p {
+            font-size: 0.82rem;
+            color: #64748b;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            line-height: 1.3;
+            word-break: break-all;
+        }
+        .memo-card-buttons {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 3px;
+            z-index: 2;
+        }
+
+        /* 전체보기 모달 팝업 스타일 */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            padding: 20px;
+        }
+        .modal-content {
+            background: white;
+            width: 100%;
+            max-width: 450px;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            position: relative;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header {
+            font-size: 1.15rem;
+            font-weight: bold;
+            color: #0f172a;
+            margin-bottom: 12px;
+            padding-right: 30px;
+            word-break: break-all;
+        }
+        .modal-body {
+            font-size: 0.95rem;
+            color: #334155;
+            line-height: 1.5;
+            white-space: pre-line;
+            overflow-y: auto;
+            word-break: break-all;
+            margin-bottom: 20px;
+            flex: 1;
+            padding-right: 5px;
+        }
+        .modal-close-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+        .modal-x-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: #64748b;
+            cursor: pointer;
+        }
+
+        .form-box { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border-color); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 3px; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.9rem; background: #fff; }
+        .form-group textarea { resize: vertical; height: 60px; }
+        
+        .btn-row { display: flex; gap: 8px; margin-top: 5px; }
+        button.btn-submit { background: var(--primary-color); color: white; border: none; padding: 10px; width: 100%; border-radius: 8px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
+        button.btn-cancel { background: #64748b; color: white; border: none; padding: 10px; width: 100%; border-radius: 8px; font-weight: bold; font-size: 0.95rem; cursor: pointer; display: none; }
+
+        .card-buttons { position: absolute; top: 12px; right: 12px; display: flex; gap: 3px; z-index: 2; }
+        .btn-move { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 3px 6px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; font-weight: bold; }
+        .btn-edit { background: #e0f2fe; color: #0369a1; border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; font-weight: bold; }
+        .btn-delete { background: #fee2e2; color: var(--danger-color); border: none; padding: 3px 6px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; font-weight: bold; }
+
+        /* 하단 네비게이션 바 (모바일 스크롤 충돌 방지를 위해 absolute 기반으로 안전하게 배치) */
+        nav { 
+            position: fixed; 
+            bottom: 0; 
+            left: 0; 
+            width: 100%; 
+            background: white; 
+            border-top: 1px solid var(--border-color); 
+            display: flex; 
+            justify-content: space-around; 
+            padding: 10px 2px; 
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.05); 
+            z-index: 1000; 
+        }
+        nav button { background: none; border: none; font-size: 0.75rem; color: #64748b; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+        nav button.active { color: var(--primary-color); font-weight: bold; }
+        nav span.icon { font-size: 1.2rem; }
+
+        .total-box { background: #e0f2fe; color: #0369a1; padding: 15px; border-radius: 10px; margin-bottom: 15px; font-size: 0.9rem; line-height: 1.5; }
+        .total-box b { font-size: 1rem; display: block; margin-bottom: 5px; }
+        
+        section h2 { margin-bottom: 5px; font-size: 1.2rem; }
+        .section-desc { font-size: 0.85rem; color: #64748b; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+    <!-- 모바일 스크롤 완벽 대응 래퍼 -->
+    <div id="app-wrapper">
+        <header>✈️ 여행 플래너</header>
+
+        <div class="container">
+            
+            <!-- 1. 스케줄 화면 -->
+            <div id="tab-schedule" class="tab-content active">
+                <h2>📅 여행 스케줄 관리</h2>
+                <p class="section-desc">일정을 추가, 수정하고 순서를 변경할 수 있습니다. (카드를 누르면 전체 내용이 보입니다)</p>
+                
+                <div class="form-box">
+                    <input type="hidden" id="sch-edit-index" value="-1">
+                    <div class="form-group">
+                        <label>일정 제목</label>
+                        <input type="text" id="sch-title" placeholder="예: 1일차 점심">
+                    </div>
+                    <div class="form-group">
+                        <label>상세 내용</label>
+                        <textarea id="sch-desc" placeholder="상세 내용을 입력하세요"></textarea>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn-submit" id="sch-btn" onclick="saveSchedule()">스케줄 추가하기</button>
+                        <button class="btn-cancel" id="sch-cancel-btn" onclick="resetScheduleForm()">취소</button>
+                    </div>
+                </div>
+
+                <div id="schedule-list"></div>
+            </div>
+
+            <!-- 2. 예약 내역 화면 -->
+            <div id="tab-reservation" class="tab-content">
+                <h2>✈️ 예약 내역 관리</h2>
+                <p class="section-desc">예약 정보를 추가, 수정하고 순서를 변경할 수 있습니다. (카드를 누르면 전체 내용이 보입니다)</p>
+                
+                <div class="form-box">
+                    <input type="hidden" id="res-edit-index" value="-1">
+                    <div class="form-group">
+                        <label>예약 항목명</label>
+                        <input type="text" id="res-title" placeholder="예: 공항 픽업">
+                    </div>
+                    <div class="form-group">
+                        <label>예약 상세</label>
+                        <textarea id="res-desc" placeholder="예: 8.25(화) 12:10 / 다낭공항 ➔ 한시장"></textarea>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn-submit" id="res-btn" onclick="saveReservation()">예약 내역 추가하기</button>
+                        <button class="btn-cancel" id="res-cancel-btn" onclick="resetReservationForm()">취소</button>
+                    </div>
+                </div>
+
+                <div id="reservation-list"></div>
+            </div>
+
+            <!-- 3. 가계부 화면 -->
+            <div id="tab-money" class="tab-content">
+                <h2>💰 가계부 (쓴 돈 관리)</h2>
+                <p class="section-desc">화폐 단위별로 지출을 기록하세요.</p>
+                
+                <div class="total-box">
+                    <b>📊 화폐별 총 지출 합계</b>
+                    <div id="total-content">내역이 없습니다.</div>
+                </div>
+
+                <div class="form-box">
+                    <input type="hidden" id="money-edit-index" value="-1">
+                    <div class="form-group">
+                        <label>사용 항목</label>
+                        <input type="text" id="money-name" placeholder="예: 롯데마트 쇼핑, 반미 식사 등">
+                    </div>
+                    <div class="form-group">
+                        <label>화폐 단위 선택</label>
+                        <select id="money-currency" onchange="updateLivePreview()">
+                            <option value="VND">베트남 동 (VND)</option>
+                            <option value="KRW">원화 (KRW)</option>
+                            <option value="USD">달러 (USD)</option>
+                            <option value="JPY">엔화 (JPY)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>금액</label>
+                        <input type="number" id="money-price" placeholder="금액 입력" oninput="updateLivePreview()">
+                        <div id="live-preview" style="font-size: 0.8rem; color: var(--primary-color); margin-top: 5px; font-weight: bold;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>비고 (선택 입력)</label>
+                        <input type="text" id="money-note" placeholder="예: 망고젤리 5개, 커피 선물 등 세부내용">
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn-submit" id="money-btn" onclick="saveExpense()">지출 내역 추가하기</button>
+                        <button class="btn-cancel" id="money-cancel-btn" onclick="resetExpenseForm()">취소</button>
+                    </div>
+                </div>
+
+                <div id="expense-list"></div>
+            </div>
+
+            <!-- 4. 메모 화면 -->
+            <div id="tab-memo" class="tab-content">
+                <h2>📝 메모 & 정보</h2>
+                <p class="section-desc">숙소 주소, 여권번호, 비상 연락망 등을 기록하세요. (카드를 누르면 전체 내용이 보입니다)</p>
+                
+                <div class="form-box">
+                    <input type="hidden" id="memo-edit-index" value="-1">
+                    <div class="form-group">
+                        <label>메모 제목</label>
+                        <input type="text" id="memo-title" placeholder="예: 호텔 영문 주소">
+                    </div>
+                    <div class="form-group">
+                        <label>메모 내용</label>
+                        <textarea id="memo-desc" placeholder="내용을 입력하세요"></textarea>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn-submit" id="memo-btn" onclick="saveMemo()">메모 추가하기</button>
+                        <button class="btn-cancel" id="memo-cancel-btn" onclick="resetMemoForm()">취소</button>
+                    </div>
+                </div>
+
+                <div id="memo-list" class="memo-grid"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 전체보기 공통 모달 팝업 -->
+    <div id="common-modal" class="modal-overlay" onclick="closeCommonModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="modal-x-btn" onclick="closeCommonModalDirect()">✕</button>
+            <div id="modal-title" class="modal-header"></div>
+            <div id="modal-body" class="modal-body"></div>
+            <button class="modal-close-btn" onclick="closeCommonModalDirect()">닫기</button>
+        </div>
+    </div>
+
+    <!-- 하단 네비게이션 탭 바 -->
+    <nav>
+        <button class="active" onclick="switchTab('schedule', this)">
+            <span class="icon">📅</span>스케줄
+        </button>
+        <button onclick="switchTab('reservation', this)">
+            <span class="icon">✈️</span>예약
+        </button>
+        <button onclick="switchTab('money', this)">
+            <span class="icon">💰</span>가계부
+        </button>
+        <button onclick="switchTab('memo', this)">
+            <span class="icon">📝</span>메모
+        </button>
+    </nav>
+
+    <script>
+        const exchangeRates = { KRW: 1, VND: 0.055, USD: 1350, JPY: 900 };
+        const currencyNames = { KRW: '원화(KRW)', VND: '베트남 동(VND)', USD: '달러(USD)', JPY: '엔화(JPY)' };
+
+        let schedules = JSON.parse(localStorage.getItem('danang_schedules')) || [
+            { title: "1일차: 출발 및 입국", desc: "• 집 출발 ➔ 인천공항 ➔ 다낭 공항 도착\n• 아지트 환전 및 냐벱 점심식사" }
+        ];
+
+        let reservations = JSON.parse(localStorage.getItem('danang_reservations')) || [
+            { title: "공항 픽업 (마이리얼트립)", desc: "• 날짜: 8.25(화) 12:10 (항공편: 7C2211)\n• 픽업: 다낭 공항 ➔ 한시장" }
+        ];
+
+        let expenses = JSON.parse(localStorage.getItem('danang_expenses')) || [];
+
+        let memos = JSON.parse(localStorage.getItem('danang_memos')) || [
+            { title: "현지 숙소 주소", desc: "로열 글로리 아파트\n26 An Đồn 6, Sơn Trà, Đà Nẵng" },
+            { title: "비상 연락처", desc: "영사콜센터: +82-2-3210-0404\n다낭 영사관 연락처 확인" }
+        ];
+
+        renderAll();
+
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            element.classList.add('active');
+            document.getElementById('app-wrapper').scrollTo(0, 0);
+        }
+
+        function updateLivePreview() {
+            const price = Number(document.getElementById('money-price').value);
+            const currency = document.getElementById('money-currency').value;
+            const previewEl = document.getElementById('live-preview');
+
+            if (!price || price <= 0) {
+                previewEl.innerText = '';
+                return;
+            }
+
+            let rate = exchangeRates[currency] || 1;
+            let converted = currency === 'JPY' ? (price * rate) / 100 : price * rate;
+            previewEl.innerText = `💡 환산 금액: 약 ${Math.round(converted).toLocaleString()}원`;
+        }
+
+        // --- 공통 모달 관련 함수 ---
+        function openModal(title, text) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-body').innerText = text || '(내용이 없습니다)';
+            document.getElementById('common-modal').style.display = 'flex';
+        }
+
+        function closeCommonModalDirect() {
+            document.getElementById('common-modal').style.display = 'none';
+        }
+
+        function closeCommonModal(event) {
+            if (event.target.id === 'common-modal') {
+                closeCommonModalDirect();
+            }
+        }
+
+        // --- 스케줄 로직 ---
+        function saveSchedule() {
+            const title = document.getElementById('sch-title').value.trim();
+            const desc = document.getElementById('sch-desc').value.trim();
+            const editIndex = Number(document.getElementById('sch-edit-index').value);
+
+            if (!title) { alert('제목을 입력해주세요!'); return; }
+
+            if (editIndex === -1) {
+                schedules.push({ title, desc });
+            } else {
+                schedules[editIndex] = { title, desc };
+            }
+
+            localStorage.setItem('danang_schedules', JSON.stringify(schedules));
+            resetScheduleForm();
+            renderSchedules();
+        }
+
+        function editSchedule(index) {
+            document.getElementById('sch-title').value = schedules[index].title;
+            document.getElementById('sch-desc').value = schedules[index].desc;
+            document.getElementById('sch-edit-index').value = index;
+            document.getElementById('sch-btn').innerText = '스케줄 수정 완료';
+            document.getElementById('sch-cancel-btn').style.display = 'block';
+            document.getElementById('app-wrapper').scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetScheduleForm() {
+            document.getElementById('sch-title').value = '';
+            document.getElementById('sch-desc').value = '';
+            document.getElementById('sch-edit-index').value = -1;
+            document.getElementById('sch-btn').innerText = '스케줄 추가하기';
+            document.getElementById('sch-cancel-btn').style.display = 'none';
+        }
+
+        function deleteSchedule(index) {
+            schedules.splice(index, 1);
+            localStorage.setItem('danang_schedules', JSON.stringify(schedules));
+            renderSchedules();
+        }
+
+        function moveSchedule(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= schedules.length) return;
+            const temp = schedules[index];
+            schedules[index] = schedules[targetIndex];
+            schedules[targetIndex] = temp;
+            localStorage.setItem('danang_schedules', JSON.stringify(schedules));
+            renderSchedules();
+        }
+
+        function renderSchedules() {
+            const container = document.getElementById('schedule-list');
+            container.innerHTML = '';
+            schedules.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.onclick = () => openModal(item.title, item.desc);
+                div.innerHTML = `
+                    <div class="card-buttons">
+                        <button class="btn-move" onclick="event.stopPropagation(); moveSchedule(${index}, -1)">▲</button>
+                        <button class="btn-move" onclick="event.stopPropagation(); moveSchedule(${index}, 1)">▼</button>
+                        <button class="btn-edit" onclick="event.stopPropagation(); editSchedule(${index})">수정</button>
+                        <button class="btn-delete" onclick="event.stopPropagation(); deleteSchedule(${index})">삭제</button>
+                    </div>
+                    <h3>${item.title}</h3>
+                    <p style="white-space: pre-line;">${item.desc}</p>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // --- 예약 내역 로직 ---
+        function saveReservation() {
+            const title = document.getElementById('res-title').value.trim();
+            const desc = document.getElementById('res-desc').value.trim();
+            const editIndex = Number(document.getElementById('res-edit-index').value);
+
+            if (!title) { alert('예약 항목명을 입력해주세요!'); return; }
+
+            if (editIndex === -1) {
+                reservations.push({ title, desc });
+            } else {
+                reservations[editIndex] = { title, desc };
+            }
+
+            localStorage.setItem('danang_reservations', JSON.stringify(reservations));
+            resetReservationForm();
+            renderReservations();
+        }
+
+        function editReservation(index) {
+            document.getElementById('res-title').value = reservations[index].title;
+            document.getElementById('res-desc').value = reservations[index].desc;
+            document.getElementById('res-edit-index').value = index;
+            document.getElementById('res-btn').innerText = '예약 내역 수정 완료';
+            document.getElementById('res-cancel-btn').style.display = 'block';
+            document.getElementById('app-wrapper').scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetReservationForm() {
+            document.getElementById('res-title').value = '';
+            document.getElementById('res-desc').value = '';
+            document.getElementById('res-edit-index').value = -1;
+            document.getElementById('res-btn').innerText = '예약 내역 추가하기';
+            document.getElementById('res-cancel-btn').style.display = 'none';
+        }
+
+        function deleteReservation(index) {
+            reservations.splice(index, 1);
+            localStorage.setItem('danang_reservations', JSON.stringify(reservations));
+            renderReservations();
+        }
+
+        function moveReservation(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= reservations.length) return;
+            const temp = reservations[index];
+            reservations[index] = reservations[targetIndex];
+            reservations[targetIndex] = temp;
+            localStorage.setItem('danang_reservations', JSON.stringify(reservations));
+            renderReservations();
+        }
+
+        function renderReservations() {
+            const container = document.getElementById('reservation-list');
+            container.innerHTML = '';
+            reservations.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.onclick = () => openModal(item.title, item.desc);
+                div.innerHTML = `
+                    <div class="card-buttons">
+                        <button class="btn-move" onclick="event.stopPropagation(); moveReservation(${index}, -1)">▲</button>
+                        <button class="btn-move" onclick="event.stopPropagation(); moveReservation(${index}, 1)">▼</button>
+                        <button class="btn-edit" onclick="event.stopPropagation(); editReservation(${index})">수정</button>
+                        <button class="btn-delete" onclick="event.stopPropagation(); deleteReservation(${index})">삭제</button>
+                    </div>
+                    <h3>${item.title}</h3>
+                    <p style="white-space: pre-line;">${item.desc}</p>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // --- 가계부 로직 ---
+        function saveExpense() {
+            const name = document.getElementById('money-name').value.trim();
+            const currency = document.getElementById('money-currency').value;
+            const price = Number(document.getElementById('money-price').value);
+            const note = document.getElementById('money-note').value.trim();
+            const editIndex = Number(document.getElementById('money-edit-index').value);
+
+            if (!name || !price) { alert('항목 이름과 금액을 모두 입력해주세요!'); return; }
+
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+            if (editIndex === -1) {
+                expenses.push({ name, currency, price, note, date: dateStr });
+            } else {
+                const existingDate = expenses[editIndex].date || dateStr;
+                expenses[editIndex] = { name, currency, price, note, date: existingDate };
+            }
+
+            localStorage.setItem('danang_expenses', JSON.stringify(expenses));
+            resetExpenseForm();
+            renderExpenses();
+        }
+
+        function editExpense(index) {
+            document.getElementById('money-name').value = expenses[index].name;
+            document.getElementById('money-currency').value = expenses[index].currency;
+            document.getElementById('money-price').value = expenses[index].price;
+            document.getElementById('money-note').value = expenses[index].note || '';
+            document.getElementById('money-edit-index').value = index;
+            document.getElementById('money-btn').innerText = '지출 내역 수정 완료';
+            document.getElementById('money-cancel-btn').style.display = 'block';
+            updateLivePreview();
+            document.getElementById('app-wrapper').scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetExpenseForm() {
+            document.getElementById('money-name').value = '';
+            document.getElementById('money-price').value = '';
+            document.getElementById('money-note').value = '';
+            document.getElementById('money-edit-index').value = -1;
+            document.getElementById('money-btn').innerText = '지출 내역 추가하기';
+            document.getElementById('money-cancel-btn').style.display = 'none';
+            document.getElementById('live-preview').innerText = '';
+        }
+
+        function deleteExpense(index) {
+            expenses.splice(index, 1);
+            localStorage.setItem('danang_expenses', JSON.stringify(expenses));
+            renderExpenses();
+        }
+
+        function renderExpenses() {
+            const container = document.getElementById('expense-list');
+            container.innerHTML = '';
+            
+            let totals = { KRW: 0, VND: 0, USD: 0, JPY: 0 };
+            let activeCurrencies = new Set();
+
+            expenses.forEach((item, index) => {
+                if (totals[item.currency] !== undefined) {
+                    totals[item.currency] += item.price;
+                    activeCurrencies.add(item.currency);
+                }
+
+                let rate = exchangeRates[item.currency] || 1;
+                let converted = item.currency === 'JPY' ? (item.price * rate) / 100 : item.price * rate;
+
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.style.cursor = 'default';
+                div.innerHTML = `
+                    <div class="card-buttons">
+                        <button class="btn-delete" onclick="deleteExpense(${index})">삭제</button>
+                        <button class="btn-edit" onclick="editExpense(${index})">수정</button>
+                    </div>
+                    <div style="padding-right: 70px;">
+                        <span style="font-size: 0.75rem; color: #94a3b8; display: block; margin-bottom: 2px;">${item.date || ''}</span>
+                        <h3>${item.name}</h3>
+                        ${item.note ? `<p style="font-size: 0.85rem; color: #475569; margin: 3px 0; -webkit-line-clamp: 2;">💬 ${item.note}</p>` : ''}
+                        <p style="color: var(--primary-color); font-weight: bold; font-size: 0.95rem; margin-top: 4px;">
+                            ${item.price.toLocaleString()} ${item.currency} 
+                            <span style="color: #64748b; font-weight: normal; font-size: 0.85rem;">(약 ${Math.round(converted).toLocaleString()}원)</span>
+                        </p>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            const totalContent = document.getElementById('total-content');
+            if (activeCurrencies.size === 0) {
+                totalContent.innerHTML = '입력된 지출 내역이 없습니다.';
+            } else {
+                let html = '';
+                activeCurrencies.forEach(curr => {
+                    html += `<div>${currencyNames[curr]}: ${totals[curr].toLocaleString()}</div>`;
+                });
+                totalContent.innerHTML = html;
+            }
+        }
+
+        // --- 메모 로직 및 모달 팝업 ---
+        function saveMemo() {
+            const title = document.getElementById('memo-title').value.trim();
+            const desc = document.getElementById('memo-desc').value.trim();
+            const editIndex = Number(document.getElementById('memo-edit-index').value);
+
+            if (!title) { alert('메모 제목을 입력해주세요!'); return; }
+
+            if (editIndex === -1) {
+                memos.push({ title, desc });
+            } else {
+                memos[editIndex] = { title, desc };
+            }
+
+            localStorage.setItem('danang_memos', JSON.stringify(memos));
+            resetMemoForm();
+            renderMemos();
+        }
+
+        function editMemo(index) {
+            document.getElementById('memo-title').value = memos[index].title;
+            document.getElementById('memo-desc').value = memos[index].desc;
+            document.getElementById('memo-edit-index').value = index;
+            document.getElementById('memo-btn').innerText = '메모 수정 완료';
+            document.getElementById('memo-cancel-btn').style.display = 'block';
+            document.getElementById('app-wrapper').scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetMemoForm() {
+            document.getElementById('memo-title').value = '';
+            document.getElementById('memo-desc').value = '';
+            document.getElementById('memo-edit-index').value = -1;
+            document.getElementById('memo-btn').innerText = '메모 추가하기';
+            document.getElementById('memo-cancel-btn').style.display = 'none';
+        }
+
+        function deleteMemo(index) {
+            memos.splice(index, 1);
+            localStorage.setItem('danang_memos', JSON.stringify(memos));
+            renderMemos();
+        }
+
+        function renderMemos() {
+            const container = document.getElementById('memo-list');
+            container.innerHTML = '';
+            memos.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'memo-card';
+                div.onclick = () => openModal(item.title, item.desc);
+                div.innerHTML = `
+                    <div class="memo-card-buttons">
+                        <button class="btn-edit" onclick="event.stopPropagation(); editMemo(${index})">수정</button>
+                        <button class="btn-delete" onclick="event.stopPropagation(); deleteMemo(${index})">삭제</button>
+                    </div>
+                    <div>
+                        <h4>${item.title}</h4>
+                        <p style="white-space: pre-line;">${item.desc}</p>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderAll() {
+            renderSchedules();
+            renderReservations();
+            renderExpenses();
+            renderMemos();
+        }
+    </script>
+</body>
+</html>
